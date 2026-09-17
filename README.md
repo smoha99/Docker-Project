@@ -79,21 +79,6 @@ docker-compose down
 | Code changes not appearing | Docker was using a cached image layer | Rebuilt with `docker-compose up --build` |
 | App unreachable on expected port | Leftover port `5002` from a different project used internally | Standardized the internal port on `5000` across `app.py` (`app.run(port=5000)`) and the Dockerfile (`EXPOSE 5000`); the host-facing port (`5003`) is a separate, independent choice made in `docker-compose.yml`'s `ports:` mapping |
 
-## Concepts Demonstrated (Interview Notes)
-
-**Why two containers instead of one?**
-Each container should do one job — this is the single-responsibility principle applied to infrastructure. Flask and Redis have different runtimes, scaling needs, and lifecycles. Splitting them means each can be updated, restarted, or scaled independently, and the Redis image doesn't need to be modified or rebuilt just because the Flask app's code changed.
-
-**What does `depends_on` do — and not do?**
-`depends_on: [redis]` tells Docker Compose to *start* the Redis container before the `web` container. It does **not** wait for Redis to be ready to accept connections — only for the container process to have started. In a slower-starting database this can cause a race condition (the app tries to connect before Redis is actually ready). For this project, Redis starts fast enough that it isn't an issue, but a production setup would add a proper health check or retry logic.
-
-**Why does `host='redis'` work?**
-Docker Compose creates a default network for all services in the same `docker-compose.yml`, and automatically registers each service's name as a DNS hostname on that network. So `redis` isn't a fixed IP — it's a name Docker resolves internally to whichever container is running the `redis` service. This is what allows the two containers to talk to each other without hardcoded IP addresses.
-
-**`EXPOSE` (Dockerfile) vs. `ports:` (docker-compose.yml) — what's the difference?**
-- `EXPOSE 5000` in the Dockerfile is documentation/metadata: it tells anyone reading the image that the container listens on port 5000. It does **not** actually publish the port to the host machine.
-- `ports: ["5003:5000"]` in `docker-compose.yml` is what actually maps a port on the host machine to a port inside the container, making the app reachable from a browser. The format is `"HOST:CONTAINER"` — here, requests to `localhost:5003` on your machine get forwarded to port `5000` inside the container, which is where Flask is actually listening. Without this mapping, the container could still work internally (e.g., other containers could reach it), but nothing outside Docker could connect to it.
-
 ## Roadmap: Remaining Bonus Features
 
 These are being built one at a time, deliberately, so each can be explained and defended individually rather than treated as boilerplate:
