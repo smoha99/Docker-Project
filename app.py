@@ -46,9 +46,13 @@ def render_page(title, subtitle=""):
 
 @app.route('/')
 def home():
+    return render_page("Welcome to my Flask + Redis app!")
+
+@app.route('/count')
+def count():
     visits = redis_client.incr('counter')
     quote = random.choice(quotes)
-    return render_page(f"Welcome to my Flask + Redis app! (Visit #{visits})", quote)
+    return render_page(f"Visit count: {visits}", quote)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)

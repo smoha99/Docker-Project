@@ -6,7 +6,7 @@ A multi-container web application built for the CoderCo Containers Challenge, de
 
 A Flask web application backed by a Redis database, running as two separate Docker containers orchestrated by Docker Compose. The app displays a welcome message and tracks the number of visits using a persistent counter stored in Redis.
 
-**Live behavior:** every time you load the page, Flask increments a counter in Redis and displays it alongside a random quote.
+**Live behavior:** `/` shows a static welcome message. Every time you load `/count`, Flask increments a counter in Redis and displays the new total alongside a random quote.
 
 ## Architecture
 
@@ -14,7 +14,7 @@ A Flask web application backed by a Redis database, running as two separate Dock
                     ┌─────────────────────────────────────────┐
                     │           Docker Compose Network          │
                     │                                           │
-   Browser  ──5000──▶   ┌───────────────┐      ┌─────────────┐  │
+   Browser  ──5003──▶   ┌───────────────┐      ┌─────────────┐  │
                     │   │  web (Flask)  │◀────▶│    redis    │  │
                     │   │  port 5000    │ 6379 │  port 6379  │  │
                     │   └───────────────┘      └─────────────┘  │
@@ -24,7 +24,7 @@ A Flask web application backed by a Redis database, running as two separate Dock
 
 | Container | Image | Role |
 |---|---|---|
-| `web` | Built from local `Dockerfile` (Python 3.12-slim) | Serves the Flask app, handles HTTP requests |
+| `web` | Built from local `Dockerfile` (Python 3.12-slim) | Serves the Flask app, handles HTTP requests. Runs on container port 5000, published to host port **5003**. |
 | `redis` | Official `redis` image | Stores and increments the visit counter |
 
 The two containers communicate over the default network Docker Compose creates automatically. Flask reaches Redis using the hostname `redis` — Docker Compose's built-in DNS resolves that service name to the Redis container's internal IP, so no manual networking configuration is required.
@@ -53,7 +53,11 @@ The two containers communicate over the default network Docker Compose creates a
 docker-compose up --build
 ```
 
-Then visit **http://localhost:5000** in your browser. Refresh the page to watch the visit counter climb.
+Then visit:
+- **http://localhost:5003** — welcome message only
+- **http://localhost:5003/count** — increments and displays the visit count
+
+Refresh `/count` to watch the visit counter climb.
 
 To stop:
 
@@ -63,9 +67,9 @@ docker-compose down
 
 ## Design Decisions
 
-**Combined route instead of two separate routes.** The original brief called for a static `/` route (welcome message) and a separate stateful `/count` route (visit counter). I deliberately combined both into a single `/` route so a live demo shows the welcome message *and* the incrementing counter in one page load, rather than requiring a second navigation. I understand and can explain the alternative: keeping `/` and `/count` separate is a cleaner separation-of-concerns pattern (a route with no side effects vs. one that mutates state), and I chose the combined version purely for demo presentation, not because I didn't understand the distinction.
+**Two separate routes, as the brief specifies.** `/` is a static route with no side effects — it just renders a welcome message. `/count` is a stateful route — every request increments the Redis counter and displays the new value plus a random quote. Keeping these separate is a deliberate separation-of-concerns pattern: a route that only reads/renders is easy to reason about and safe to call repeatedly (e.g. by a health check or a bot), while a route that mutates state is kept explicit and isolated.
 
-**Port correction (5000, not 5002/5003).** An earlier draft carried over a hardcoded port (`5002`) from an unrelated project. It was corrected to `5000` so that the Flask app's `app.run(port=5000)`, the Dockerfile's `EXPOSE 5000`, and the `docker-compose.yml` port mapping (`"5000:5000"`) are all consistent. A mismatch between any of these would either break the container or make the app unreachable from the host.
+**Port mapping (host 5003 → container 5000).** Inside the container, Flask still listens on port 5000 — that's what `app.run(port=5000)` and the Dockerfile's `EXPOSE 5000` declare, and it never needs to change. The `docker-compose.yml` port mapping `"5003:5000"` means: host port 5003 forwards to container port 5000. This is exactly why the two numbers in a `ports:` mapping don't have to match — the left side is whatever's convenient/free on your host machine, the right side must match what the app actually listens on inside the container. An earlier draft had briefly used a leftover port from an unrelated project internally, which was corrected — the internal port and `EXPOSE` must always match what `app.run()` uses, regardless of which host port you choose to publish it on.
 
 ## Issues Hit & Fixed
 
@@ -73,7 +77,7 @@ docker-compose down
 |---|---|---|
 | Build failure | `requirements.txt` was missing | Created it with `flask` and `redis` |
 | Code changes not appearing | Docker was using a cached image layer | Rebuilt with `docker-compose up --build` |
-| App unreachable on expected port | Leftover port `5002` from a different project | Standardized on `5000` across `app.py`, `Dockerfile`, and `docker-compose.yml` |
+| App unreachable on expected port | Leftover port `5002` from a different project used internally | Standardized the internal port on `5000` across `app.py` (`app.run(port=5000)`) and the Dockerfile (`EXPOSE 5000`); the host-facing port (`5003`) is a separate, independent choice made in `docker-compose.yml`'s `ports:` mapping |
 
 ## Concepts Demonstrated (Interview Notes)
 
@@ -88,7 +92,7 @@ Docker Compose creates a default network for all services in the same `docker-co
 
 **`EXPOSE` (Dockerfile) vs. `ports:` (docker-compose.yml) — what's the difference?**
 - `EXPOSE 5000` in the Dockerfile is documentation/metadata: it tells anyone reading the image that the container listens on port 5000. It does **not** actually publish the port to the host machine.
-- `ports: ["5000:5000"]` in `docker-compose.yml` is what actually maps a port on the host machine to a port inside the container, making the app reachable from a browser. Without this mapping, the container could still work internally (e.g., other containers could reach it), but nothing outside Docker could connect to it.
+- `ports: ["5003:5000"]` in `docker-compose.yml` is what actually maps a port on the host machine to a port inside the container, making the app reachable from a browser. The format is `"HOST:CONTAINER"` — here, requests to `localhost:5003` on your machine get forwarded to port `5000` inside the container, which is where Flask is actually listening. Without this mapping, the container could still work internally (e.g., other containers could reach it), but nothing outside Docker could connect to it.
 
 ## Roadmap: Remaining Bonus Features
 
