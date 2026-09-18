@@ -1,12 +1,16 @@
 # app.py
 
-from flask import Flask
-import redis
+import os
 import random
+from flask import Flask, render_template
+import redis
 
 app = Flask(__name__)
 
-redis_client = redis.Redis(host='redis', port=6379)
+redis_host = os.getenv("REDIS_HOST", "redis")
+redis_port = int(os.getenv("REDIS_PORT", 6379))
+
+redis_client = redis.Redis(host=redis_host, port=redis_port)
 
 quotes = [
     "Doubt kills more dreams than failure ever will. – Suzy Kassem",
@@ -17,42 +21,19 @@ quotes = [
     "Nothing is impossible. The word itself says 'I'm possible!' – Audrey Hepburn"
 ]
 
-def render_page(title, subtitle=""):
-    return f"""
-    <html>
-      <head>
-        <title>Flask + Redis App</title>
-        <style>
-          body {{
-            font-family: Arial, sans-serif;
-            text-align: center;
-            margin-top: 100px;
-          }}
-          h1 {{
-            font-size: 36px;
-          }}
-          p {{
-            font-size: 20px;
-            color: #555;
-          }}
-        </style>
-      </head>
-      <body>
-        <h1>{title}</h1>
-        <p>{subtitle}</p>
-      </body>
-    </html>
-    """
-
 @app.route('/')
 def home():
-    return render_page("Welcome to my Flask + Redis app!")
+    return render_template('index.html')
 
 @app.route('/count')
 def count():
     visits = redis_client.incr('counter')
     quote = random.choice(quotes)
-    return render_page(f"Visit count: {visits}", quote)
+    return render_template('count.html', visit_count=visits, quote=quote)
+
+@app.route('/about')
+def about():
+    return render_template('about.html')
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
