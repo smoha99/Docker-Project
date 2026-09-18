@@ -1,6 +1,6 @@
 # Docker Project: Flask + Redis Multi-Container App
 
-A multi-container web application built for the CoderCo Containers Challenge, demonstrating containerization, service orchestration, and inter-container networking with Docker Compose.
+A multi-container web application demonstrating containerisation, service orchestration, and inter-container networking with Docker Compose.
 
 ## Overview
 
